@@ -1,0 +1,146 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00100000000000000000001 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000001 /* main.m */; };
+		A00100000000000000000002 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000003 /* AppDelegate.m */; };
+		A00100000000000000000003 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000005 /* ViewController.m */; };
+		A00100000000000000000004 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000007 /* LaunchScreen.storyboard */; };
+		A00100000000000000000005 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000009 /* ReplayKit.framework */; };
+		A00100000000000000000006 /* SampleHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = B0010000000000000000000B /* SampleHandler.m */; };
+		A00100000000000000000007 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000009 /* ReplayKit.framework */; };
+		A00100000000000000000008 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0010000000000000000000D /* QuartzCore.framework */; };
+		A00100000000000000000009 /* LiveBroadcast.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B0010000000000000000000E /* LiveBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, CodeSignOnCopy, ); }; };
+		A0010000000000000000000A /* MJPEGServer.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000010 /* MJPEGServer.m */; };
+		A0010000000000000000000B /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000011 /* Network.framework */; };
+		A0010000000000000000000C /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000012 /* CoreImage.framework */; };
+		A0010000000000000000000D /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000013 /* ImageIO.framework */; };
+		A0010000000000000000000E /* WebRTCStreamer.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000015 /* WebRTCStreamer.m */; };
+		A0010000000000000000000F /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000016 /* WebRTC.framework */; };
+		A00100000000000000000010 /* WebRTC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000016 /* WebRTC.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, CodeSignOnCopy, ); }; };
+		A00100000000000000000011 /* VTH264EncoderFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000019 /* VTH264EncoderFactory.m */; };
+		A00100000000000000000012 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0010000000000000000001A /* VideoToolbox.framework */; };
+		A00100000000000000000013 /* TouchInjector.m in Sources */ = {isa = PBXBuildFile; fileRef = B0010000000000000000001E /* TouchInjector.m */; };
+		A00100000000000000000014 /* TouchIPCServer.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000020 /* TouchIPCServer.m */; };
+		A00100000000000000000015 /* BackgroundKeeper.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000022 /* BackgroundKeeper.m */; };
+		A00100000000000000000016 /* TouchIPCClient.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000024 /* TouchIPCClient.m */; };
+		A00100000000000000000017 /* AudioAppStreamer.m in Sources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000026 /* AudioAppStreamer.m */; };
+		A00100000000000000000018 /* viewer.html in Resources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000027 /* viewer.html */; };
+		A00100000000000000000019 /* audio-worklet.js in Resources */ = {isa = PBXBuildFile; fileRef = B00100000000000000000028 /* audio-worklet.js */; };
+		A0010000000000000000001A /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000029 /* AVFoundation.framework */; };
+		A0010000000000000000001B /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B00100000000000000000029 /* AVFoundation.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C00100000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = E00100000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = F00100000000000000000002; remoteInfo = LiveBroadcast; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D00100000000000000000001 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A00100000000000000000009 /* LiveBroadcast.appex in Embed App Extensions */, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B00100000000000000000001 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		B00100000000000000000002 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		B00100000000000000000003 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		B00100000000000000000004 /* ViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ViewController.h; sourceTree = "<group>"; };
+		B00100000000000000000005 /* ViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ViewController.m; sourceTree = "<group>"; };
+		B00100000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00100000000000000000007 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		B00100000000000000000008 /* livetest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = livetest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00100000000000000000009 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
+		B0010000000000000000000A /* SampleHandler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SampleHandler.h; sourceTree = "<group>"; };
+		B0010000000000000000000B /* SampleHandler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SampleHandler.m; sourceTree = "<group>"; };
+		B0010000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B0010000000000000000000D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		B0010000000000000000000E /* LiveBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LiveBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0010000000000000000000F /* MJPEGServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MJPEGServer.h; sourceTree = "<group>"; };
+		B00100000000000000000010 /* MJPEGServer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MJPEGServer.m; sourceTree = "<group>"; };
+		B00100000000000000000011 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
+		B00100000000000000000012 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
+		B00100000000000000000013 /* ImageIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };
+		B00100000000000000000014 /* WebRTCStreamer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WebRTCStreamer.h; sourceTree = "<group>"; };
+		B00100000000000000000015 /* WebRTCStreamer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WebRTCStreamer.m; sourceTree = "<group>"; };
+		B00100000000000000000016 /* WebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = WebRTC.framework; sourceTree = "<group>"; };
+		B00100000000000000000017 /* GoogleWebRTC-LICENSE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "GoogleWebRTC-LICENSE.md"; sourceTree = "<group>"; };
+		B00100000000000000000018 /* VTH264EncoderFactory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VTH264EncoderFactory.h; sourceTree = "<group>"; };
+		B00100000000000000000019 /* VTH264EncoderFactory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VTH264EncoderFactory.m; sourceTree = "<group>"; };
+		B0010000000000000000001A /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
+		B0010000000000000000001B /* livetest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = livetest.entitlements; sourceTree = "<group>"; };
+		B0010000000000000000001C /* LiveBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LiveBroadcast.entitlements; sourceTree = "<group>"; };
+		B0010000000000000000001D /* TouchInjector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TouchInjector.h; sourceTree = "<group>"; };
+		B0010000000000000000001E /* TouchInjector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TouchInjector.m; sourceTree = "<group>"; };
+		B0010000000000000000001F /* TouchIPCServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TouchIPCServer.h; sourceTree = "<group>"; };
+		B00100000000000000000020 /* TouchIPCServer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TouchIPCServer.m; sourceTree = "<group>"; };
+		B00100000000000000000021 /* BackgroundKeeper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BackgroundKeeper.h; sourceTree = "<group>"; };
+		B00100000000000000000022 /* BackgroundKeeper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BackgroundKeeper.m; sourceTree = "<group>"; };
+		B00100000000000000000023 /* TouchIPCClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TouchIPCClient.h; sourceTree = "<group>"; };
+		B00100000000000000000024 /* TouchIPCClient.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TouchIPCClient.m; sourceTree = "<group>"; };
+		B00100000000000000000025 /* AudioAppStreamer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioAppStreamer.h; sourceTree = "<group>"; };
+		B00100000000000000000026 /* AudioAppStreamer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioAppStreamer.m; sourceTree = "<group>"; };
+		B00100000000000000000027 /* viewer.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = viewer.html; sourceTree = "<group>"; };
+		B00100000000000000000028 /* audio-worklet.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "audio-worklet.js"; sourceTree = "<group>"; };
+		B00100000000000000000029 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D00100000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000005 /* ReplayKit.framework in Frameworks */, A0010000000000000000001A /* AVFoundation.framework in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+		D00100000000000000000003 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000007 /* ReplayKit.framework in Frameworks */, A00100000000000000000008 /* QuartzCore.framework in Frameworks */, A0010000000000000000000B /* Network.framework in Frameworks */, A0010000000000000000000C /* CoreImage.framework in Frameworks */, A0010000000000000000000D /* ImageIO.framework in Frameworks */, A0010000000000000000000F /* WebRTC.framework in Frameworks */, A00100000000000000000012 /* VideoToolbox.framework in Frameworks */, A0010000000000000000001B /* AVFoundation.framework in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G00100000000000000000001 = {isa = PBXGroup; children = (G00100000000000000000002 /* livetest */, G00100000000000000000003 /* LiveBroadcast */, G00100000000000000000004 /* Frameworks */, G00100000000000000000005 /* Products */, ); sourceTree = "<group>"; };
+		G00100000000000000000002 /* livetest */ = {isa = PBXGroup; children = (B00100000000000000000001 /* main.m */, B00100000000000000000002 /* AppDelegate.h */, B00100000000000000000003 /* AppDelegate.m */, B00100000000000000000004 /* ViewController.h */, B00100000000000000000005 /* ViewController.m */, B0010000000000000000001D /* TouchInjector.h */, B0010000000000000000001E /* TouchInjector.m */, B0010000000000000000001F /* TouchIPCServer.h */, B00100000000000000000020 /* TouchIPCServer.m */, B00100000000000000000021 /* BackgroundKeeper.h */, B00100000000000000000022 /* BackgroundKeeper.m */, B00100000000000000000007 /* LaunchScreen.storyboard */, B00100000000000000000006 /* Info.plist */, B0010000000000000000001B /* livetest.entitlements */, ); path = livetest; sourceTree = "<group>"; };
+		G00100000000000000000003 /* LiveBroadcast */ = {isa = PBXGroup; children = (B0010000000000000000000A /* SampleHandler.h */, B0010000000000000000000B /* SampleHandler.m */, B0010000000000000000000F /* MJPEGServer.h */, B00100000000000000000010 /* MJPEGServer.m */, B00100000000000000000014 /* WebRTCStreamer.h */, B00100000000000000000015 /* WebRTCStreamer.m */, B00100000000000000000018 /* VTH264EncoderFactory.h */, B00100000000000000000019 /* VTH264EncoderFactory.m */, B00100000000000000000023 /* TouchIPCClient.h */, B00100000000000000000024 /* TouchIPCClient.m */, B00100000000000000000025 /* AudioAppStreamer.h */, B00100000000000000000026 /* AudioAppStreamer.m */, B00100000000000000000027 /* viewer.html */, B00100000000000000000028 /* audio-worklet.js */, B0010000000000000000000C /* Info.plist */, B0010000000000000000001C /* LiveBroadcast.entitlements */, ); path = LiveBroadcast; sourceTree = "<group>"; };
+		G00100000000000000000004 /* Frameworks */ = {isa = PBXGroup; children = (B00100000000000000000009 /* ReplayKit.framework */, B0010000000000000000000D /* QuartzCore.framework */, B00100000000000000000011 /* Network.framework */, B00100000000000000000012 /* CoreImage.framework */, B00100000000000000000013 /* ImageIO.framework */, B0010000000000000000001A /* VideoToolbox.framework */, B00100000000000000000029 /* AVFoundation.framework */, B00100000000000000000016 /* WebRTC.framework */, B00100000000000000000017 /* GoogleWebRTC-LICENSE.md */, ); name = Frameworks; path = Frameworks; sourceTree = "<group>"; };
+		G00100000000000000000005 /* Products */ = {isa = PBXGroup; children = (B00100000000000000000008 /* livetest.app */, B0010000000000000000000E /* LiveBroadcast.appex */, ); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F00100000000000000000001 /* livetest */ = {isa = PBXNativeTarget; buildConfigurationList = H00100000000000000000002; buildPhases = (D00100000000000000000004 /* Sources */, D00100000000000000000002 /* Frameworks */, D00100000000000000000006 /* Resources */, D00100000000000000000008 /* Embed Frameworks */, D00100000000000000000001 /* Embed App Extensions */, ); buildRules = (); dependencies = (C00200000000000000000001 /* PBXTargetDependency */, ); name = livetest; productName = livetest; productReference = B00100000000000000000008 /* livetest.app */; productType = "com.apple.product-type.application"; };
+		F00100000000000000000002 /* LiveBroadcast */ = {isa = PBXNativeTarget; buildConfigurationList = H00100000000000000000003; buildPhases = (D00100000000000000000005 /* Sources */, D00100000000000000000003 /* Frameworks */, D00100000000000000000007 /* Resources */, ); buildRules = (); dependencies = (); name = LiveBroadcast; productName = LiveBroadcast; productReference = B0010000000000000000000E /* LiveBroadcast.appex */; productType = "com.apple.product-type.app-extension"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E00100000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1500; TargetAttributes = {F00100000000000000000001 = {CreatedOnToolsVersion = 15.0; }; F00100000000000000000002 = {CreatedOnToolsVersion = 15.0; }; }; }; buildConfigurationList = H00100000000000000000001; compatibilityVersion = "Xcode 9.3"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = G00100000000000000000001; productRefGroup = G00100000000000000000005 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (F00100000000000000000001 /* livetest */, F00100000000000000000002 /* LiveBroadcast */, ); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D00100000000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000004 /* LaunchScreen.storyboard in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		D00100000000000000000007 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000018 /* viewer.html in Resources */, A00100000000000000000019 /* audio-worklet.js in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section (Frameworks) */
+		D00100000000000000000008 /* Embed Frameworks */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 10; files = (A00100000000000000000010 /* WebRTC.framework in Embed Frameworks */, ); name = "Embed Frameworks"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section (Frameworks) */
+
+/* Begin PBXSourcesBuildPhase section */
+		D00100000000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000001 /* main.m in Sources */, A00100000000000000000002 /* AppDelegate.m in Sources */, A00100000000000000000003 /* ViewController.m in Sources */, A00100000000000000000013 /* TouchInjector.m in Sources */, A00100000000000000000014 /* TouchIPCServer.m in Sources */, A00100000000000000000015 /* BackgroundKeeper.m in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		D00100000000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00100000000000000000006 /* SampleHandler.m in Sources */, A0010000000000000000000A /* MJPEGServer.m in Sources */, A0010000000000000000000E /* WebRTCStreamer.m in Sources */, A00100000000000000000011 /* VTH264EncoderFactory.m in Sources */, A00100000000000000000016 /* TouchIPCClient.m in Sources */, A00100000000000000000017 /* AudioAppStreamer.m in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C00200000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = F00100000000000000000002 /* LiveBroadcast */; targetProxy = C00100000000000000000001; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		I00100000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu11; IPHONEOS_DEPLOYMENT_TARGET = 12.0; SDKROOT = iphoneos; }; name = Debug; };
+		I00100000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu11; IPHONEOS_DEPLOYMENT_TARGET = 12.0; SDKROOT = iphoneos; VALIDATE_PRODUCT = YES; }; name = Release; };
+		I00100000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = livetest/livetest.entitlements; CODE_SIGN_STYLE = Automatic; INFOPLIST_FILE = livetest/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 12.0; PRODUCT_BUNDLE_IDENTIFIER = com.layii.live; PRODUCT_NAME = "$(TARGET_NAME)"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		I00100000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = livetest/livetest.entitlements; CODE_SIGN_STYLE = Automatic; INFOPLIST_FILE = livetest/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 12.0; PRODUCT_BUNDLE_IDENTIFIER = com.layii.live; PRODUCT_NAME = "$(TARGET_NAME)"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		I00100000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = LiveBroadcast/LiveBroadcast.entitlements; CODE_SIGN_STYLE = Automatic; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)/Frameworks", ); INFOPLIST_FILE = LiveBroadcast/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 12.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); PRODUCT_BUNDLE_IDENTIFIER = com.layii.live.LiveBroadcast; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		I00100000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = LiveBroadcast/LiveBroadcast.entitlements; CODE_SIGN_STYLE = Automatic; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)/Frameworks", ); INFOPLIST_FILE = LiveBroadcast/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 12.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); PRODUCT_BUNDLE_IDENTIFIER = com.layii.live.LiveBroadcast; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		H00100000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (I00100000000000000000001 /* Debug */, I00100000000000000000002 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		H00100000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (I00100000000000000000003 /* Debug */, I00100000000000000000004 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		H00100000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (I00100000000000000000005 /* Debug */, I00100000000000000000006 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = E00100000000000000000001 /* Project object */;
+}

@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>直播远程控制</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+    video{display:block;width:100%;height:100%;object-fit:contain;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+    #message{position:fixed;inset:0;display:none;place-items:center;padding:24px;color:#fff;background:#000;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;z-index:2}
+  </style>
+</head>
+<body>
+  <video id="screen" autoplay playsinline muted></video>
+  <div id="message"></div>
+<script>
+'use strict';
+const video=document.getElementById('screen'),message=document.getElementById('message');
+let pc,controlChannel,controlEnabled=false,activePointer=null,lastPoint=null,pendingMove=null,moveRAF=0,touchSeq=0,closing=false,reconnectTimer=0,connectGeneration=0;
+
+function showError(text){message.textContent=text;message.style.display='grid'}
+function waitIce(p){if(p.iceGatheringState==='complete')return Promise.resolve();return new Promise(resolve=>{let finished=false;const done=()=>{if(finished)return;finished=true;clearTimeout(timer);p.removeEventListener('icegatheringstatechange',changed);resolve()};const changed=()=>{if(p.iceGatheringState==='complete')done()};const timer=setTimeout(done,4000);p.addEventListener('icegatheringstatechange',changed)})}
+function renderedVideoRect(){const rect=video.getBoundingClientRect(),vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh||!rect.width||!rect.height)return null;const scale=Math.min(rect.width/vw,rect.height/vh),width=vw*scale,height=vh*scale;return{left:rect.left+(rect.width-width)/2,top:rect.top+(rect.height-height)/2,width,height}}
+function pointerPoint(event){const rect=renderedVideoRect();if(!rect)return null;const x=event.clientX-rect.left,y=event.clientY-rect.top;if(x<0||y<0||x>rect.width||y>rect.height)return null;return{x:Math.min(1,Math.max(0,x/rect.width)),y:Math.min(1,Math.max(0,y/rect.height)),cssX:event.clientX,cssY:event.clientY,pointerId:event.pointerId}}
+function sendControl(data){if(controlChannel&&controlChannel.readyState==='open'){controlChannel.send(JSON.stringify(data));return true}return false}
+function sendTouch(phase,point,pointerId){if(!controlEnabled&&phase!=='cancel')return;const value=point||lastPoint;if(!value&&phase!=='cancel')return;sendControl({type:'touch',phase,pointerId:pointerId==null?(activePointer==null?0:activePointer):pointerId,x:value?value.x:0,y:value?value.y:0,cssX:value?value.cssX:0,cssY:value?value.cssY:0,seq:++touchSeq})}
+function flushMove(){moveRAF=0;if(!pendingMove)return;const point=pendingMove;pendingMove=null;lastPoint=point;sendTouch('move',point,point.pointerId)}
+video.addEventListener('pointerdown',event=>{if(!controlEnabled||(event.pointerType==='mouse'&&event.button!==0))return;const point=pointerPoint(event);if(!point)return;lastPoint=point;activePointer=event.pointerId;video.setPointerCapture(event.pointerId);sendTouch('down',point,event.pointerId);event.preventDefault()});
+video.addEventListener('pointermove',event=>{if(event.pointerId!==activePointer)return;const point=pointerPoint(event);if(!point)return;pendingMove=point;if(!moveRAF)moveRAF=requestAnimationFrame(flushMove);event.preventDefault()});
+function finishPointer(event,cancelled){if(event.pointerId!==activePointer)return;if(moveRAF){cancelAnimationFrame(moveRAF);moveRAF=0;flushMove()}const point=pointerPoint(event)||lastPoint;if(point)lastPoint=point;sendTouch(cancelled?'cancel':'up',point,event.pointerId);activePointer=null;pendingMove=null;event.preventDefault()}
+video.addEventListener('pointerup',event=>finishPointer(event,false));
+video.addEventListener('pointercancel',event=>finishPointer(event,true));
+video.addEventListener('lostpointercapture',event=>{if(event.pointerId===activePointer)finishPointer(event,true)});
+video.addEventListener('contextmenu',event=>{if(controlEnabled)event.preventDefault()});
+
+function scheduleReconnect(reason){
+  if(closing)return;
+  clearTimeout(reconnectTimer);
+  showError((reason||'连接已断开')+'，正在重新连接…');
+  reconnectTimer=setTimeout(()=>connectViewer(),800);
+}
+async function connectViewer(){
+  const generation=++connectGeneration;
+  clearTimeout(reconnectTimer);
+  message.style.display='none';
+  let localPC=null;
+  try{
+    const oldPC=pc;
+    if(oldPC){oldPC.onconnectionstatechange=null;oldPC.ontrack=null;oldPC.close()}
+    controlEnabled=false;
+    controlChannel=null;
+    localPC=new RTCPeerConnection({iceServers:[]});
+    pc=localPC;
+    controlChannel=localPC.createDataChannel('control',{ordered:true});
+    controlChannel.onopen=()=>{if(pc!==localPC)return;controlEnabled=true;sendControl({type:'control',enabled:true})};
+    controlChannel.onclose=()=>{if(pc!==localPC)return;controlEnabled=false;if(activePointer!==null){activePointer=null;pendingMove=null}};
+    localPC.ontrack=event=>{if(pc===localPC&&event.track.kind==='video'){video.srcObject=new MediaStream([event.track]);video.play().catch(error=>{if(error.name!=='NotAllowedError')showError('播放失败：'+error.message)})}};
+    localPC.onconnectionstatechange=()=>{
+      if(closing||pc!==localPC)return;
+      if(localPC.connectionState==='failed'||localPC.connectionState==='closed')scheduleReconnect('连接已断开');
+      else if(localPC.connectionState==='disconnected')setTimeout(()=>{if(!closing&&pc===localPC&&localPC.connectionState==='disconnected')scheduleReconnect('网络暂时中断')},1200);
+    };
+    localPC.addTransceiver('video',{direction:'recvonly'});
+    await localPC.setLocalDescription(await localPC.createOffer());
+    await waitIce(localPC);
+    if(closing||generation!==connectGeneration||pc!==localPC)return;
+
+    const controller=typeof AbortController==='function'?new AbortController():null;
+    const timeout=setTimeout(()=>{if(controller)controller.abort()},7000);
+    let response;
+    try{
+      response=await fetch('/webrtc/offer',{method:'POST',headers:{'Content-Type':'application/sdp'},body:localPC.localDescription.sdp,signal:controller?controller.signal:undefined});
+    }finally{clearTimeout(timeout)}
+    if(!response.ok)throw new Error(await response.text());
+    const answer=await response.text();
+    if(closing||generation!==connectGeneration||pc!==localPC)return;
+    await localPC.setRemoteDescription({type:'answer',sdp:answer});
+  }catch(error){
+    console.error(error);
+    if(!closing&&generation===connectGeneration) scheduleReconnect(error.name==='AbortError'?'协商超时':'连接失败：'+error.message);
+  }
+}
+window.addEventListener('beforeunload',()=>{closing=true;clearTimeout(reconnectTimer);connectGeneration++;if(activePointer!==null)sendTouch('cancel',lastPoint,activePointer);sendControl({type:'control',enabled:false});if(pc){pc.onconnectionstatechange=null;pc.close()}});
+connectViewer();
+</script>
+</body>
+</html>
