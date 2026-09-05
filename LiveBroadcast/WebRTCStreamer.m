@@ -992,9 +992,9 @@ enum {
                                                             NULL);
     if (!value) return (RTCVideoRotation)self.rotationDegrees;
     switch (value.integerValue) {
-        case kCGImagePropertyOrientationRight: return RTCVideoRotation_90;
+        case kCGImagePropertyOrientationRight: return RTCVideoRotation_270;
         case kCGImagePropertyOrientationDown: return RTCVideoRotation_180;
-        case kCGImagePropertyOrientationLeft: return RTCVideoRotation_270;
+        case kCGImagePropertyOrientationLeft: return RTCVideoRotation_90;
         default: return RTCVideoRotation_0;
     }
 }
