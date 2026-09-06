@@ -2,6 +2,7 @@
 #import <ReplayKit/ReplayKit.h>
 #import <arpa/inet.h>
 #import <ifaddrs.h>
+#import <net/if.h>
 #import <string.h>
 
 static NSString * const LTSettingsSuite = @"group.com.layii.live";
@@ -10,6 +11,7 @@ static NSString * const LTWidthKey = @"resolution.width";
 static NSString * const LTHeightKey = @"resolution.height";
 static NSString * const LTCodecKey = @"stream.preferredCodec";
 static NSString * const LTHighQualityHighFPSKey = @"stream.highQualityHighFPS";
+static NSString * const LTShareDeviceAudioKey = @"audio.shareDeviceAudio";
 static NSString * const LTDeviceNameKey = @"network.deviceName";
 static NSString * const LTAddressModeKey = @"network.addressMode";
 static NSString * const LTNetworkModeKey = @"network.mode";
@@ -22,6 +24,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 @property (nonatomic, strong) UISwitch *maximumSwitch;
 @property (nonatomic, strong) UISegmentedControl *codecControl;
 @property (nonatomic, strong) UISwitch *highQualitySwitch;
+@property (nonatomic, strong) UISwitch *deviceAudioSwitch;
 @property (nonatomic, strong) NSUserDefaults *streamDefaults;
 @property (nonatomic, strong) RPSystemBroadcastPickerView *broadcastPicker;
 @property (nonatomic, strong) UITextField *deviceNameField;
@@ -33,6 +36,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 @property (nonatomic, strong) UIStackView *customServerContainer;
 @property (nonatomic, strong) UITextField *customServerField;
 @property (nonatomic, strong) UILabel *urlLabel;
+@property (nonatomic, strong) UIButton *localCopyButton;
 @property (nonatomic, strong) UILabel *externalURLLabel;
 @property (nonatomic, strong) UIButton *externalCopyButton;
 @property (nonatomic, strong) UILabel *customServerURLLabel;
@@ -42,6 +46,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 @property (nonatomic, copy) NSString *localURL;
 @property (nonatomic, copy) NSString *externalURL;
 @property (nonatomic, copy) NSString *customServerURL;
+@property (nonatomic) NSUInteger ipRetryGeneration;
 @end
 
 @implementation ViewController
@@ -72,6 +77,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
         LTHeightKey: @1280,
         LTCodecKey: @"H264",
         LTHighQualityHighFPSKey: @YES,
+        LTShareDeviceAudioKey: @YES,
         LTDeviceNameKey: defaultDeviceName,
         LTAddressModeKey: @0,
         LTNetworkModeKey: @0,
@@ -116,6 +122,23 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     launchHint.textAlignment = NSTextAlignmentCenter;
     launchHint.textColor = [self secondaryTextColor];
 
+    UILabel *deviceAudioLabel = [self labelWithText:@"共享设备音频" size:16 weight:UIFontWeightMedium];
+    self.deviceAudioSwitch = [UISwitch new];
+    self.deviceAudioSwitch.on = [self.streamDefaults boolForKey:LTShareDeviceAudioKey];
+    self.deviceAudioSwitch.onTintColor = [self accentColor];
+    [self.deviceAudioSwitch addTarget:self action:@selector(deviceAudioChanged:)
+                        forControlEvents:UIControlEventValueChanged];
+    UIStackView *deviceAudioRow = [[UIStackView alloc] initWithArrangedSubviews:@[
+        deviceAudioLabel, self.deviceAudioSwitch
+    ]];
+    deviceAudioRow.axis = UILayoutConstraintAxisHorizontal;
+    deviceAudioRow.alignment = UIStackViewAlignmentCenter;
+    deviceAudioRow.distribution = UIStackViewDistributionEqualSpacing;
+    deviceAudioRow.layoutMargins = UIEdgeInsetsMake(12, 16, 12, 16);
+    deviceAudioRow.layoutMarginsRelativeArrangement = YES;
+    deviceAudioRow.backgroundColor = [self cardBackgroundColor];
+    deviceAudioRow.layer.cornerRadius = 12;
+
     UILabel *resolutionTitle = [self labelWithText:@"自定义编码分辨率" size:16 weight:UIFontWeightSemibold];
     self.widthField = [self resolutionFieldWithValue:[self.streamDefaults integerForKey:LTWidthKey]];
     self.heightField = [self resolutionFieldWithValue:[self.streamDefaults integerForKey:LTHeightKey]];
@@ -133,7 +156,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     [self.heightField.widthAnchor constraintEqualToConstant:100].active = YES;
     [self.widthField.heightAnchor constraintEqualToConstant:44].active = YES;
     [self.heightField.heightAnchor constraintEqualToConstant:44].active = YES;
-
+    
     UILabel *maximumLabel = [self labelWithText:@"使用 ReplayKit 最大分辨率" size:16 weight:UIFontWeightMedium];
     self.maximumSwitch = [UISwitch new];
     self.maximumSwitch.on = [self.streamDefaults boolForKey:LTUseMaximumKey];
@@ -157,7 +180,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     highQualityRow.alignment = UIStackViewAlignmentCenter;
     highQualityRow.distribution = UIStackViewDistributionEqualSpacing;
 
-    UILabel *codecLabel = [self labelWithText:@"编码" size:16 weight:UIFontWeightMedium];
+    UILabel *codecLabel = [self labelWithText:@"直播编码" size:16 weight:UIFontWeightMedium];
     self.codecControl = [[UISegmentedControl alloc] initWithItems:@[@"H.264", @"VP8"]];
     self.codecControl.backgroundColor = [self fieldBackgroundColor];
     self.codecControl.tintColor = [self accentColor];
@@ -291,29 +314,33 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     self.portField.delegate = self;
     [self.portField.heightAnchor constraintEqualToConstant:44].active = YES;
     [self.portField.widthAnchor constraintEqualToConstant:110].active = YES;
-    UIStackView *portRow = [[UIStackView alloc] initWithArrangedSubviews:@[portLabel, self.portField]];
-    portRow.axis = UILayoutConstraintAxisHorizontal;
-    portRow.alignment = UIStackViewAlignmentCenter;
-    portRow.distribution = UIStackViewDistributionEqualSpacing;
-
     UIButton *applyPortButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [applyPortButton setTitle:@"应用端口设置" forState:UIControlStateNormal];
+    [applyPortButton setTitle:@"应用" forState:UIControlStateNormal];
     [applyPortButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     applyPortButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     applyPortButton.backgroundColor = [self accentColor];
     applyPortButton.layer.cornerRadius = 9;
     [applyPortButton addTarget:self action:@selector(applyPortSetting:)
               forControlEvents:UIControlEventTouchUpInside];
+    [applyPortButton.widthAnchor constraintEqualToConstant:68].active = YES;
     [applyPortButton.heightAnchor constraintEqualToConstant:42].active = YES;
 
+    UIStackView *portRow = [[UIStackView alloc] initWithArrangedSubviews:@[
+        portLabel, self.portField, applyPortButton
+    ]];
+    portRow.axis = UILayoutConstraintAxisHorizontal;
+    portRow.alignment = UIStackViewAlignmentCenter;
+    portRow.distribution = UIStackViewDistributionEqualSpacing;
+    portRow.spacing = 10;
+
     self.urlLabel = [self urlValueLabel];
-    UIButton *copyButton = [self copyButtonWithAction:@selector(copyLocalURL:)];
-    UIStackView *urlRow = [[UIStackView alloc] initWithArrangedSubviews:@[self.urlLabel, copyButton]];
+    self.localCopyButton = [self copyButtonWithAction:@selector(copyLocalURL:)];
+    UIStackView *urlRow = [[UIStackView alloc] initWithArrangedSubviews:@[self.urlLabel, self.localCopyButton]];
     urlRow.axis = UILayoutConstraintAxisHorizontal;
     urlRow.alignment = UIStackViewAlignmentCenter;
     urlRow.spacing = 10;
 
-    UILabel *addressNotice = [self labelWithText:@"局域网可用 IP 地址或设备名称访问。修改端口后点击“应用端口设置”；如果直播已经开始，需要重新开启直播才能让监听端口切换。"
+    UILabel *addressNotice = [self labelWithText:@"局域网可用 IP 地址或设备名称访问。修改端口后点击“应用”；如果直播已经开始，需要重新开启直播才能让监听端口切换。"
                                                size:12 weight:UIFontWeightRegular];
     addressNotice.textColor = [self secondaryTextColor];
     addressNotice.numberOfLines = 0;
@@ -408,7 +435,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     self.customServerContainer.spacing = 12;
 
     UIStackView *accessCard = [[UIStackView alloc] initWithArrangedSubviews:@[
-        networkModeRow, portRow, applyPortButton, self.lanContainer, self.wanContainer, self.customServerContainer
+        networkModeRow, portRow, self.lanContainer, self.wanContainer, self.customServerContainer
     ]];
     accessCard.axis = UILayoutConstraintAxisVertical;
     accessCard.spacing = 14;
@@ -422,7 +449,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     creditLabel.textAlignment = NSTextAlignmentCenter;
 
     UIStackView *content = [[UIStackView alloc] initWithArrangedSubviews:@[
-        titleLabel, startButton, launchHint, settings, instructions, accessCard, creditLabel
+        titleLabel, startButton, deviceAudioRow, launchHint, settings, instructions, accessCard, creditLabel
     ]];
     content.translatesAutoresizingMaskIntoConstraints = NO;
     content.axis = UILayoutConstraintAxisVertical;
@@ -451,12 +478,25 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     [self.view addGestureRecognizer:tap];
     [self updateResolutionFields];
     [self updateNetworkModeUI];
-    [self updateAccessURL];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationDidBecomeActive:)
+                                                 name:UIApplicationDidBecomeActiveNotification
+                                               object:nil];
+    [self refreshAccessURLWithIPRetry];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self updateAccessURL];
+    [self refreshAccessURLWithIPRetry];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    (void)notification;
+    [self refreshAccessURLWithIPRetry];
 }
 
 - (UILabel *)labelWithText:(NSString *)text size:(CGFloat)size weight:(UIFontWeight)weight {
@@ -493,6 +533,11 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 
 - (void)highQualityChanged:(UISwitch *)sender {
     [self.streamDefaults setBool:sender.isOn forKey:LTHighQualityHighFPSKey];
+    [self.streamDefaults synchronize];
+}
+
+- (void)deviceAudioChanged:(UISwitch *)sender {
+    [self.streamDefaults setBool:sender.isOn forKey:LTShareDeviceAudioKey];
     [self.streamDefaults synchronize];
 }
 
@@ -547,7 +592,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 - (void)addressModeChanged:(UISegmentedControl *)sender {
     [self.streamDefaults setInteger:sender.selectedSegmentIndex forKey:LTAddressModeKey];
     [self.streamDefaults synchronize];
-    [self updateAccessURL];
+    [self refreshAccessURLWithIPRetry];
 }
 
 - (void)deviceNameChanged:(UITextField *)sender {
@@ -582,7 +627,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     [self.streamDefaults setInteger:port forKey:LTPortKey];
     [self.streamDefaults synchronize];
     [self.view endEditing:YES];
-    [self updateAccessURL];
+    [self refreshAccessURLWithIPRetry];
 
     [sender setTitle:@"已应用" forState:UIControlStateNormal];
     sender.enabled = NO;
@@ -590,7 +635,7 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         UIButton *button = weakButton;
-        [button setTitle:@"应用端口设置" forState:UIControlStateNormal];
+        [button setTitle:@"应用" forState:UIControlStateNormal];
         button.enabled = YES;
     });
 }
@@ -612,13 +657,42 @@ static NSString * const LTCustomServerKey = @"network.customServer";
     self.customServerContainer.hidden = mode != 2;
 }
 
+- (void)refreshAccessURLWithIPRetry {
+    NSUInteger generation = ++self.ipRetryGeneration;
+    [self updateAccessURL];
+    if (self.ipURL.length) return;
+
+    NSArray<NSNumber *> *delays = @[@0.4, @0.8, @1.5, @2.5, @4.0];
+    __weak typeof(self) weakSelf = self;
+    for (NSNumber *delay in delays) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            ViewController *strongSelf = weakSelf;
+            if (!strongSelf || strongSelf.ipRetryGeneration != generation) return;
+            [strongSelf updateAccessURL];
+            if (strongSelf.ipURL.length) strongSelf.ipRetryGeneration++;
+        });
+    }
+}
+
 - (void)updateAccessURL {
     NSInteger port = [self configuredPort];
     NSString *deviceName = [self normalizedDeviceName:self.deviceNameField.text];
-    self.ipURL = [NSString stringWithFormat:@"http://%@:%ld/", [self localIPAddress], (long)port];
+    NSString *localIP = [self localIPAddress];
+    self.ipURL = localIP.length ? [NSString stringWithFormat:@"http://%@:%ld/", localIP, (long)port] : nil;
     self.deviceURL = [NSString stringWithFormat:@"http://%@.local:%ld/", deviceName, (long)port];
-    self.localURL = self.addressControl.selectedSegmentIndex == 1 ? self.deviceURL : self.ipURL;
-    self.urlLabel.text = self.localURL;
+
+    BOOL useDeviceName = self.addressControl.selectedSegmentIndex == 1;
+    self.localURL = useDeviceName ? self.deviceURL : self.ipURL;
+    if (self.localURL.length) {
+        self.urlLabel.text = self.localURL;
+        self.localCopyButton.enabled = YES;
+        self.localCopyButton.alpha = 1.0;
+    } else {
+        self.urlLabel.text = @"正在获取 IP…";
+        self.localCopyButton.enabled = NO;
+        self.localCopyButton.alpha = 0.45;
+    }
 
     NSString *ipv6 = [self globalIPv6Address];
     if (ipv6.length) {
@@ -795,20 +869,26 @@ static NSString * const LTCustomServerKey = @"network.customServer";
 
 - (NSString *)localIPAddress {
     struct ifaddrs *interfaces = NULL;
-    NSString *address = @"iPhone-IP";
-    if (getifaddrs(&interfaces) == 0) {
-        for (struct ifaddrs *item = interfaces; item; item = item->ifa_next) {
-            if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET) continue;
-            if (strcmp(item->ifa_name, "en0") == 0) {
-                char host[INET_ADDRSTRLEN] = {0};
-                struct sockaddr_in *socketAddress = (struct sockaddr_in *)item->ifa_addr;
-                if (inet_ntop(AF_INET, &socketAddress->sin_addr, host, sizeof(host)))
-                    address = [NSString stringWithUTF8String:host];
-                break;
-            }
-        }
-        freeifaddrs(interfaces);
+    NSString *address = nil;
+    if (getifaddrs(&interfaces) != 0) return nil;
+
+    for (struct ifaddrs *item = interfaces; item; item = item->ifa_next) {
+        if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET) continue;
+        if (strcmp(item->ifa_name, "en0") != 0) continue;
+        if (!(item->ifa_flags & IFF_UP) || !(item->ifa_flags & IFF_RUNNING) ||
+            (item->ifa_flags & IFF_LOOPBACK)) continue;
+
+        struct sockaddr_in *socketAddress = (struct sockaddr_in *)item->ifa_addr;
+        uint32_t ipv4 = ntohl(socketAddress->sin_addr.s_addr);
+        if (ipv4 == 0 || (ipv4 >> 24) == 127 || (ipv4 & 0xFFFF0000U) == 0xA9FE0000U) continue;
+
+        char host[INET_ADDRSTRLEN] = {0};
+        if (!inet_ntop(AF_INET, &socketAddress->sin_addr, host, sizeof(host))) continue;
+        address = [NSString stringWithUTF8String:host];
+        if (address.length) break;
     }
+
+    freeifaddrs(interfaces);
     return address;
 }
 

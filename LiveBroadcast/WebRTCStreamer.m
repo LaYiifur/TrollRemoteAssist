@@ -87,6 +87,7 @@ enum {
 @property (atomic) NSInteger targetFrameRate;
 @property (atomic) BOOL highQualityHighFPS;
 @property (nonatomic, strong) dispatch_queue_t frameQueue;
+@property (nonatomic, strong) dispatch_queue_t audioQueue;
 @property (nonatomic, strong) dispatch_source_t keepaliveTimer;
 @property (atomic) BOOL stopping;
 - (NSArray<LTViewerSession *> *)sessionSnapshot;
@@ -102,6 +103,7 @@ enum {
 - (void)applyVideoSenderParametersForSession:(LTViewerSession *)session;
 - (void)reloadStreamingPreferences;
 - (void)handleControlMessage:(NSDictionary *)message session:(LTViewerSession *)session;
+- (void)drainPendingAudioSamples;
 @end
 
 @implementation WebRTCStreamer {
@@ -117,11 +119,14 @@ enum {
     int _adaptedFPS;
     RTCVideoRotation _lastRotation;
     uint32_t _audioSequence;
+    CMSampleBufferRef _pendingAudioSampleBuffer;
+    BOOL _audioWorkerScheduled;
 }
 
 - (instancetype)init {
     if ((self = [super init])) {
         _frameQueue = dispatch_queue_create("com.layii.live.webrtc.frames", DISPATCH_QUEUE_SERIAL);
+        _audioQueue = dispatch_queue_create("com.layii.live.webrtc.audio", DISPATCH_QUEUE_SERIAL);
         _connectionStatus = @"正在准备 WebRTC";
         _captureStatus = @"等待 ReplayKit 画面";
         _negotiatedCodec = @"未协商";
@@ -202,6 +207,15 @@ enum {
         session.audioChannel.delegate = nil;
         [session.peerConnection close];
     }
+    dispatch_sync(self.audioQueue, ^{
+        @synchronized (self) {
+            if (self->_pendingAudioSampleBuffer) {
+                CFRelease(self->_pendingAudioSampleBuffer);
+                self->_pendingAudioSampleBuffer = NULL;
+            }
+            self->_audioWorkerScheduled = NO;
+        }
+    });
     [self.audioStreamer reset];
     self.audioStreamer = nil;
     if (self.keepaliveTimer) {
@@ -262,7 +276,8 @@ enum {
     session.identifier = ++self.nextSessionIdentifier;
     session.codec = useVP8 ? @"VP8 兼容模式" : @"H.264 VideoToolbox";
     session.controlEnabled = YES;
-    session.audioEnabled = NO;
+    // 音频是否真正共享由被控端 App 的开关决定；浏览器不再负责“启动”发送。
+    session.audioEnabled = YES;
     session.lastControlPointerID = NSNotFound;
     RTCConfiguration *configuration = [RTCConfiguration new];
     configuration.iceServers = @[];
@@ -809,8 +824,56 @@ enum {
 }
 
 - (void)processAppAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer {
-    if (![self audioSessionSnapshot].count) return;
-    [self.audioStreamer processSampleBuffer:sampleBuffer];
+    if (!sampleBuffer || self.stopping || ![self audioSessionSnapshot].count) return;
+
+    // ReplayKit 的视频和音频回调不能在这里做 AVAudioConverter / DataChannel 发送。
+    // 只保留最新一块音频，立刻返回，避免系统音频把视频/触控链路拖死。
+    CMSampleBufferRef retained = (CMSampleBufferRef)CFRetain(sampleBuffer);
+    BOOL scheduleWorker = NO;
+    @synchronized (self) {
+        if (self.stopping) {
+            CFRelease(retained);
+            return;
+        }
+        if (_pendingAudioSampleBuffer) {
+            CFRelease(_pendingAudioSampleBuffer);
+            _pendingAudioSampleBuffer = NULL;
+            self.audioDroppedCount++;
+        }
+        _pendingAudioSampleBuffer = retained;
+        if (!_audioWorkerScheduled) {
+            _audioWorkerScheduled = YES;
+            scheduleWorker = YES;
+        }
+    }
+    if (scheduleWorker) {
+        __weak typeof(self) weakSelf = self;
+        dispatch_async(self.audioQueue, ^{ [weakSelf drainPendingAudioSamples]; });
+    }
+}
+
+- (void)drainPendingAudioSamples {
+    while (!self.stopping) {
+        CMSampleBufferRef sampleBuffer = NULL;
+        @synchronized (self) {
+            sampleBuffer = _pendingAudioSampleBuffer;
+            _pendingAudioSampleBuffer = NULL;
+            if (!sampleBuffer) {
+                _audioWorkerScheduled = NO;
+                return;
+            }
+        }
+        [self.audioStreamer processSampleBuffer:sampleBuffer];
+        CFRelease(sampleBuffer);
+    }
+
+    @synchronized (self) {
+        if (_pendingAudioSampleBuffer) {
+            CFRelease(_pendingAudioSampleBuffer);
+            _pendingAudioSampleBuffer = NULL;
+        }
+        _audioWorkerScheduled = NO;
+    }
 }
 
 - (void)sendAudioPCM:(NSData *)pcm sampleRate:(uint32_t)sampleRate
@@ -829,7 +892,7 @@ enum {
         if (timestamp) timestamp += (uint64_t)llround(firstFrame * 1000000.0 / sampleRate);
     }
 
-    NSUInteger maximumPacketFrames = MAX(1U, sampleRate / 25); // 约 40ms。
+    NSUInteger maximumPacketFrames = MAX(1U, sampleRate / 50); // 约 20ms，降低 DataChannel 单包占用。
     for (NSUInteger frameOffset = firstFrame; frameOffset < totalFrames;
          frameOffset += maximumPacketFrames) {
         NSUInteger frames = MIN(maximumPacketFrames, totalFrames - frameOffset);
@@ -860,7 +923,7 @@ enum {
         for (LTViewerSession *session in targets) {
             RTCDataChannel *channel = session.audioChannel;
             if (!session.audioEnabled || channel.readyState != RTCDataChannelStateOpen) continue;
-            if (channel.bufferedAmount >= 19200) { // 每个观看端独立限制约 100ms 队列。
+            if (channel.bufferedAmount >= 8192) { // 最多只留很短的音频队列，优先保证触控通道。
                 self.audioDroppedCount++;
                 continue;
             }
@@ -1181,7 +1244,8 @@ enum {
         self.controlStatus = @"控制通道已连接（默认开启）";
     } else if ([dataChannel.label isEqualToString:@"audio"]) {
         session.audioChannel = dataChannel;
-        self.audioStatus = @"声音通道已连接（默认开启）";
+        session.audioEnabled = YES;
+        self.audioStatus = @"声音通道已连接，等待设备音频";
     }
 }
 
@@ -1201,7 +1265,8 @@ enum {
         }
     } else if (dataChannel == session.audioChannel) {
         if (dataChannel.readyState == RTCDataChannelStateOpen) {
-            self.audioStatus = @"声音通道已连接（默认开启）";
+            session.audioEnabled = YES;
+            self.audioStatus = @"声音通道已连接，等待设备音频";
         } else if (dataChannel.readyState == RTCDataChannelStateClosed) {
             session.audioEnabled = NO;
             if (![self audioSessionSnapshot].count) [self.audioStreamer reset];

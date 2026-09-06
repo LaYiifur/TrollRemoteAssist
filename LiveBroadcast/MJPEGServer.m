@@ -10,29 +10,54 @@ static NSString * const PreferredCodecKey = @"stream.preferredCodec";
 static NSString * const DeviceNameKey = @"network.deviceName";
 static NSString * const PortKey = @"network.port";
 
+@interface LTAudioHTTPClient : NSObject
+@property (nonatomic, strong) nw_connection_t connection;
+@property (nonatomic, strong) NSData *pendingPacket;
+@property (nonatomic) BOOL headerReady;
+@property (nonatomic) BOOL sending;
+@end
+@implementation LTAudioHTTPClient
+@end
+
 @interface MJPEGServer ()
 @property (nonatomic, strong) dispatch_queue_t queue;
 @property (nonatomic, strong) nw_listener_t listener;
 @property (nonatomic, strong) NSMutableArray *connections;
+@property (nonatomic, strong) NSMutableArray<LTAudioHTTPClient *> *audioClients;
 @property (nonatomic, strong) WebRTCStreamer *streamer;
 @property (nonatomic, strong) NSUserDefaults *sharedDefaults;
+@property (atomic, readwrite) BOOL hasAudioClients;
+@property (atomic) BOOL stopping;
 @end
 
-@implementation MJPEGServer
+@implementation MJPEGServer {
+    uint32_t _audioSequence;
+    NSUInteger _audioDroppedPackets;
+}
 
 - (instancetype)initWithWebRTCStreamer:(WebRTCStreamer *)streamer {
     if ((self = [super init])) {
         _queue = dispatch_queue_create("com.layii.live.http", DISPATCH_QUEUE_SERIAL);
         _connections = [NSMutableArray array];
+        _audioClients = [NSMutableArray array];
         _streamer = streamer;
         _sharedDefaults = [[NSUserDefaults alloc] initWithSuiteName:SettingsSuite];
-        [_sharedDefaults registerDefaults:@{PreferredCodecKey: @"H264", DeviceNameKey: @"iPhone", PortKey: @8080}];
+        [_sharedDefaults registerDefaults:@{
+            PreferredCodecKey: @"H264",
+            DeviceNameKey: @"iPhone",
+            PortKey: @8080
+        }];
     }
     return self;
 }
 
 - (void)start {
     if (self.listener) return;
+    self.stopping = NO;
+    self.hasAudioClients = NO;
+    _audioSequence = 0;
+    _audioDroppedPackets = 0;
+
     nw_parameters_t parameters = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL,
                                                                    NW_PARAMETERS_DEFAULT_CONFIGURATION);
     [self.sharedDefaults synchronize];
@@ -44,11 +69,13 @@ static NSString * const PortKey = @"network.port";
         NSLog(@"[LiveBroadcast] 无法创建 HTTP 服务");
         return;
     }
+
     NSString *deviceName = [self.sharedDefaults stringForKey:DeviceNameKey];
     const char *bonjourName = deviceName.length ? deviceName.UTF8String : NULL;
     nw_advertise_descriptor_t descriptor =
         nw_advertise_descriptor_create_bonjour_service(bonjourName, "_http._tcp", NULL);
     if (descriptor) nw_listener_set_advertise_descriptor(self.listener, descriptor);
+
     nw_listener_set_queue(self.listener, self.queue);
     __weak typeof(self) weakSelf = self;
     nw_listener_set_state_changed_handler(self.listener, ^(nw_listener_state_t state, nw_error_t error) {
@@ -66,21 +93,36 @@ static NSString * const PortKey = @"network.port";
 }
 
 - (void)stop {
-    if (self.listener) nw_listener_cancel(self.listener);
-    dispatch_sync(self.queue, ^{
+    if (self.stopping) return;
+    self.stopping = YES;
+    self.hasAudioClients = NO;
+
+    nw_listener_t listener = self.listener;
+    self.listener = nil;
+    if (listener) nw_listener_cancel(listener);
+
+    // 不在 ReplayKit 的 broadcastFinished 回调里同步等待网络队列。
+    dispatch_async(self.queue, ^{
         for (nw_connection_t connection in self.connections) nw_connection_cancel(connection);
         [self.connections removeAllObjects];
+        [self.audioClients removeAllObjects];
     });
-    self.listener = nil;
 }
 
 - (void)acceptConnection:(nw_connection_t)connection {
+    if (!connection || self.stopping) {
+        if (connection) nw_connection_cancel(connection);
+        return;
+    }
     [self.connections addObject:connection];
     nw_connection_set_queue(connection, self.queue);
     __weak typeof(self) weakSelf = self;
     nw_connection_set_state_changed_handler(connection, ^(nw_connection_state_t state, nw_error_t error) {
-        if (state == nw_connection_state_failed || state == nw_connection_state_cancelled)
+        (void)error;
+        if (state == nw_connection_state_failed || state == nw_connection_state_cancelled) {
             [weakSelf.connections removeObject:connection];
+            [weakSelf removeAudioClientForConnection:connection];
+        }
     });
     nw_connection_start(connection);
     [self receiveRequest:connection buffer:[NSMutableData data]];
@@ -90,7 +132,8 @@ static NSString * const PortKey = @"network.port";
     __weak typeof(self) weakSelf = self;
     nw_connection_receive(connection, 1, 16384, ^(dispatch_data_t content, nw_content_context_t context,
                                                    bool isComplete, nw_error_t error) {
-        if (error) {
+        (void)context;
+        if (error || weakSelf.stopping) {
             nw_connection_cancel(connection);
             return;
         }
@@ -152,6 +195,11 @@ static NSString * const PortKey = @"network.port";
         return;
     }
 
+    if ([request hasPrefix:@"GET /audio "]) {
+        [self beginAudioStreamForConnection:connection];
+        return;
+    }
+
     if ([request hasPrefix:@"GET /audio-worklet.js "]) {
         NSData *script = [self resourceDataNamed:@"audio-worklet" extension:@"js"];
         [self sendResponse:script.length ? 200 : 500
@@ -163,6 +211,132 @@ static NSString * const PortKey = @"network.port";
 
     [self sendResponse:200 contentType:@"text/html; charset=utf-8"
                   body:[[self viewerHTML] dataUsingEncoding:NSUTF8StringEncoding] connection:connection];
+}
+
+- (void)beginAudioStreamForConnection:(nw_connection_t)connection {
+    if (self.stopping) {
+        nw_connection_cancel(connection);
+        return;
+    }
+
+    LTAudioHTTPClient *client = [LTAudioHTTPClient new];
+    client.connection = connection;
+    [self.audioClients addObject:client];
+    self.hasAudioClients = self.audioClients.count > 0;
+
+    NSString *header = @"HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/octet-stream\r\n"
+                        "Cache-Control: no-store, no-cache\r\n"
+                        "Transfer-Encoding: chunked\r\n"
+                        "Connection: keep-alive\r\n\r\n";
+    NSData *headerData = [header dataUsingEncoding:NSASCIIStringEncoding];
+    dispatch_data_t content = dispatch_data_create(headerData.bytes, headerData.length, self.queue, ^{ (void)headerData; });
+    __weak typeof(self) weakSelf = self;
+    __weak LTAudioHTTPClient *weakClient = client;
+    nw_connection_send(connection, content, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, false, ^(nw_error_t error) {
+        LTAudioHTTPClient *strongClient = weakClient;
+        if (!strongClient) return;
+        if (error || weakSelf.stopping) {
+            [weakSelf removeAudioClient:strongClient];
+            nw_connection_cancel(connection);
+            return;
+        }
+        strongClient.headerReady = YES;
+        [weakSelf sendPendingAudioForClient:strongClient];
+        NSLog(@"[AudioHTTP] viewer connected, clients=%lu", (unsigned long)weakSelf.audioClients.count);
+    });
+}
+
+- (void)publishAudioPCM:(NSData *)pcm
+             sampleRate:(uint32_t)sampleRate
+               channels:(uint16_t)channels
+              timestamp:(uint64_t)timestampMicroseconds {
+    if (!pcm.length || !sampleRate || !channels || channels > 2 || self.stopping || !self.hasAudioClients) return;
+    NSUInteger bytesPerFrame = (NSUInteger)channels * sizeof(int16_t);
+    if (pcm.length < bytesPerFrame || pcm.length % bytesPerFrame != 0) return;
+    NSUInteger frames = pcm.length / bytesPerFrame;
+    if (frames > UINT32_MAX || pcm.length > UINT32_MAX) return;
+
+    NSMutableData *packet = [NSMutableData dataWithLength:32];
+    uint8_t *header = packet.mutableBytes;
+    memcpy(header, "LTAU", 4);
+    header[4] = 1;
+    header[5] = (uint8_t)channels;
+    header[6] = 16;
+    header[7] = 0;
+    uint32_t littleRate = CFSwapInt32HostToLittle(sampleRate);
+    uint32_t littleSequence = CFSwapInt32HostToLittle(++_audioSequence);
+    uint64_t littleTimestamp = CFSwapInt64HostToLittle(timestampMicroseconds);
+    uint32_t littleFrames = CFSwapInt32HostToLittle((uint32_t)frames);
+    uint32_t littleLength = CFSwapInt32HostToLittle((uint32_t)pcm.length);
+    memcpy(header + 8, &littleRate, sizeof(littleRate));
+    memcpy(header + 12, &littleSequence, sizeof(littleSequence));
+    memcpy(header + 16, &littleTimestamp, sizeof(littleTimestamp));
+    memcpy(header + 24, &littleFrames, sizeof(littleFrames));
+    memcpy(header + 28, &littleLength, sizeof(littleLength));
+    [packet appendData:pcm];
+    NSData *immutablePacket = packet.copy;
+
+    dispatch_async(self.queue, ^{
+        if (self.stopping || !self.audioClients.count) return;
+        for (LTAudioHTTPClient *client in self.audioClients.copy) {
+            if (client.pendingPacket) _audioDroppedPackets++;
+            client.pendingPacket = immutablePacket;
+            [self sendPendingAudioForClient:client];
+        }
+        if (_audioSequence == 1 || _audioSequence % 200 == 0) {
+            NSLog(@"[AudioHTTP] packets=%u dropped=%lu clients=%lu",
+                  _audioSequence, (unsigned long)_audioDroppedPackets,
+                  (unsigned long)self.audioClients.count);
+        }
+    });
+}
+
+- (void)sendPendingAudioForClient:(LTAudioHTTPClient *)client {
+    if (!client || !client.headerReady || client.sending || !client.pendingPacket || self.stopping) return;
+
+    NSData *packet = client.pendingPacket;
+    client.pendingPacket = nil;
+    client.sending = YES;
+
+    NSData *prefix = [[NSString stringWithFormat:@"%lX\r\n", (unsigned long)packet.length]
+                      dataUsingEncoding:NSASCIIStringEncoding];
+    static NSData *suffix;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ suffix = [@"\r\n" dataUsingEncoding:NSASCIIStringEncoding]; });
+    NSMutableData *wire = [NSMutableData dataWithCapacity:prefix.length + packet.length + suffix.length];
+    [wire appendData:prefix];
+    [wire appendData:packet];
+    [wire appendData:suffix];
+
+    dispatch_data_t content = dispatch_data_create(wire.bytes, wire.length, self.queue, ^{ (void)wire; });
+    __weak typeof(self) weakSelf = self;
+    __weak LTAudioHTTPClient *weakClient = client;
+    nw_connection_send(client.connection, content, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, false, ^(nw_error_t error) {
+        LTAudioHTTPClient *strongClient = weakClient;
+        if (!strongClient) return;
+        strongClient.sending = NO;
+        if (error || weakSelf.stopping) {
+            nw_connection_t connection = strongClient.connection;
+            [weakSelf removeAudioClient:strongClient];
+            if (connection) nw_connection_cancel(connection);
+            return;
+        }
+        [weakSelf sendPendingAudioForClient:strongClient];
+    });
+}
+
+- (void)removeAudioClientForConnection:(nw_connection_t)connection {
+    for (LTAudioHTTPClient *client in self.audioClients.copy) {
+        if (client.connection == connection) [self removeAudioClient:client];
+    }
+}
+
+- (void)removeAudioClient:(LTAudioHTTPClient *)client {
+    if (!client) return;
+    client.pendingPacket = nil;
+    [self.audioClients removeObject:client];
+    self.hasAudioClients = self.audioClients.count > 0;
 }
 
 - (NSString *)viewerHTML {
@@ -189,6 +363,7 @@ static NSString * const PortKey = @"network.port";
     [response appendData:body];
     dispatch_data_t content = dispatch_data_create(response.bytes, response.length, self.queue, ^{ (void)response; });
     nw_connection_send(connection, content, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true, ^(nw_error_t error) {
+        (void)error;
         nw_connection_cancel(connection);
     });
 }

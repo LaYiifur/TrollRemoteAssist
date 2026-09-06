@@ -48,42 +48,22 @@ static const AVAudioChannelCount LTOutputChannels = 2;
         if (!asbd || !frameCount || asbd->mSampleRate <= 0 || !asbd->mChannelsPerFrame) return;
         if (![self ensureConverterForDescription:asbd]) return;
 
-        size_t listSize = offsetof(AudioBufferList, mBuffers) +
-                          sizeof(AudioBuffer) * MAX(1U, asbd->mChannelsPerFrame);
-        AudioBufferList *sourceList = calloc(1, listSize);
-        if (!sourceList) return;
-        CMBlockBufferRef retainedBlock = NULL;
-        OSStatus status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer, &listSize, sourceList, listSize, kCFAllocatorDefault,
-            kCFAllocatorDefault, kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
-            &retainedBlock);
-        if (status != noErr) {
-            free(sourceList);
-            NSLog(@"[Audio] unable to read AudioBufferList status=%d", (int)status);
-            return;
-        }
-
         AVAudioPCMBuffer *input = [[AVAudioPCMBuffer alloc] initWithPCMFormat:_inputFormat
                                                                frameCapacity:frameCount];
+        if (!input) return;
         input.frameLength = frameCount;
-        AudioBufferList *targetList = input.mutableAudioBufferList;
-        BOOL copied = targetList->mNumberBuffers == sourceList->mNumberBuffers;
-        if (copied) {
-            for (UInt32 index = 0; index < sourceList->mNumberBuffers; index++) {
-                AudioBuffer source = sourceList->mBuffers[index];
-                AudioBuffer *target = &targetList->mBuffers[index];
-                if (!source.mData || source.mDataByteSize > target->mDataByteSize) {
-                    copied = NO;
-                    break;
-                }
-                memcpy(target->mData, source.mData, source.mDataByteSize);
-                target->mDataByteSize = source.mDataByteSize;
-            }
-        }
-        if (retainedBlock) CFRelease(retainedBlock);
-        free(sourceList);
-        if (!copied) {
-            NSLog(@"[Audio] unsupported input buffer layout");
+
+        // ReplayKit hands us PCM CMSampleBuffer objects. Copy directly into an
+        // AVAudioPCMBuffer instead of guessing the AudioBufferList allocation size.
+        // The previous fixed-size AudioBufferList could be too small for the actual
+        // sample layout and CoreMedia returned kCMSampleBufferError_ArrayTooSmall
+        // (-12737) for every audio callback.
+        OSStatus copyStatus = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+            sampleBuffer, 0, (int32_t)frameCount, input.mutableAudioBufferList);
+        if (copyStatus != noErr) {
+            NSLog(@"[Audio] unable to copy PCM status=%d frames=%u rate=%.0f channels=%u",
+                  (int)copyStatus, (unsigned)frameCount, asbd->mSampleRate,
+                  (unsigned)asbd->mChannelsPerFrame);
             return;
         }
 
