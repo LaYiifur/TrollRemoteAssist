@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>直播远程控制</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+    video{display:block;width:100%;height:100%;object-fit:contain;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+    #message{position:fixed;inset:0;display:none;place-items:center;padding:24px;color:#fff;background:#000;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;z-index:2}
+  </style>
+</head>
+<body>
+  <video id="screen" autoplay playsinline muted></video>
+  <div id="message"></div>
+<script>
+'use strict';
+const video=document.getElementById('screen'),message=document.getElementById('message');
+let pc,controlChannel,controlEnabled=false,activePointer=null,lastPoint=null,pendingMove=null,moveRAF=0,touchSeq=0,closing=false,reconnectTimer=0,connectGeneration=0;
+let audioContext=null,audioAbortController=null,audioReconnectTimer=0,audioStreamRunning=false,audioReadBuffer=new Uint8Array(0),audioNextTime=0;
+
+function showError(text){message.textContent=text;message.style.display='grid'}
+function waitIce(p){if(p.iceGatheringState==='complete')return Promise.resolve();return new Promise(resolve=>{let finished=false;const done=()=>{if(finished)return;finished=true;clearTimeout(timer);p.removeEventListener('icegatheringstatechange',changed);resolve()};const changed=()=>{if(p.iceGatheringState==='complete')done()};const timer=setTimeout(done,4000);p.addEventListener('icegatheringstatechange',changed)})}
+function renderedVideoRect(){const rect=video.getBoundingClientRect(),vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh||!rect.width||!rect.height)return null;const scale=Math.min(rect.width/vw,rect.height/vh),width=vw*scale,height=vh*scale;return{left:rect.left+(rect.width-width)/2,top:rect.top+(rect.height-height)/2,width,height}}
+function pointerPoint(event){const rect=renderedVideoRect();if(!rect)return null;const x=event.clientX-rect.left,y=event.clientY-rect.top;if(x<0||y<0||x>rect.width||y>rect.height)return null;return{x:Math.min(1,Math.max(0,x/rect.width)),y:Math.min(1,Math.max(0,y/rect.height)),cssX:event.clientX,cssY:event.clientY,pointerId:event.pointerId}}
+function sendControl(data){if(controlChannel&&controlChannel.readyState==='open'){controlChannel.send(JSON.stringify(data));return true}return false}
+
+async function unlockAudio(){
+  if(closing)return;
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass)return;
+  try{
+    if(!audioContext){
+      try{audioContext=new AudioContextClass({latencyHint:'interactive',sampleRate:48000})}
+      catch(_){audioContext=new AudioContextClass({latencyHint:'interactive'})}
+    }
+    if(audioContext.state==='suspended')await audioContext.resume();
+    if(audioContext.state==='running'&&!audioStreamRunning)startAudioStream();
+  }catch(error){console.warn('Audio unavailable:',error)}
+}
+
+function scheduleAudioReconnect(){
+  if(closing||!audioContext||audioContext.state!=='running')return;
+  clearTimeout(audioReconnectTimer);
+  audioReconnectTimer=setTimeout(()=>startAudioStream(),1000);
+}
+
+async function startAudioStream(){
+  if(closing||audioStreamRunning||!audioContext||audioContext.state!=='running')return;
+  audioStreamRunning=true;
+  audioReadBuffer=new Uint8Array(0);
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  audioAbortController=controller;
+  try{
+    const response=await fetch('/audio',{cache:'no-store',signal:controller?controller.signal:undefined});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    if(!response.body||typeof response.body.getReader!=='function')throw new Error('ReadableStream unavailable');
+    const reader=response.body.getReader();
+    while(!closing){
+      const result=await reader.read();
+      if(result.done)break;
+      if(result.value&&result.value.length)appendAudioBytes(result.value);
+    }
+  }catch(error){
+    if(!closing&&error.name!=='AbortError')console.warn('Audio stream interrupted:',error);
+  }finally{
+    if(audioAbortController===controller)audioAbortController=null;
+    audioStreamRunning=false;
+    if(!closing)scheduleAudioReconnect();
+  }
+}
+
+function appendAudioBytes(chunk){
+  if(!(chunk instanceof Uint8Array))chunk=new Uint8Array(chunk);
+  const merged=new Uint8Array(audioReadBuffer.length+chunk.length);
+  merged.set(audioReadBuffer,0);
+  merged.set(chunk,audioReadBuffer.length);
+  let offset=0;
+  while(merged.length-offset>=32){
+    if(merged[offset]!==0x4c||merged[offset+1]!==0x54||merged[offset+2]!==0x41||merged[offset+3]!==0x55||merged[offset+4]!==1){offset++;continue}
+    const view=new DataView(merged.buffer,merged.byteOffset+offset,32);
+    const channels=merged[offset+5],bits=merged[offset+6],sampleRate=view.getUint32(8,true),frames=view.getUint32(24,true),payloadLength=view.getUint32(28,true);
+    if((channels!==1&&channels!==2)||bits!==16||!sampleRate||!frames||payloadLength!==frames*channels*2||payloadLength>1048576){offset++;continue}
+    const packetLength=32+payloadLength;
+    if(merged.length-offset<packetLength)break;
+    playPCM(merged.subarray(offset+32,offset+packetLength),sampleRate,channels,frames);
+    offset+=packetLength;
+  }
+  audioReadBuffer=merged.slice(offset);
+  if(audioReadBuffer.length>2097152)audioReadBuffer=new Uint8Array(0);
+}
+
+function resampleStereo(pcm,sourceRate,targetRate){
+  if(!sourceRate||!targetRate||sourceRate===targetRate)return pcm;
+  const sourceFrames=pcm.length>>1,targetFrames=Math.max(1,Math.round(sourceFrames*targetRate/sourceRate));
+  const output=new Float32Array(targetFrames*2),scale=sourceFrames/targetFrames;
+  for(let i=0;i<targetFrames;i++){
+    const position=i*scale,index=Math.min(sourceFrames-1,Math.floor(position)),next=Math.min(sourceFrames-1,index+1),mix=position-index;
+    const a=index<<1,b=next<<1,j=i<<1;
+    output[j]=pcm[a]+(pcm[b]-pcm[a])*mix;
+    output[j+1]=pcm[a+1]+(pcm[b+1]-pcm[a+1])*mix;
+  }
+  return output;
+}
+
+function playPCM(payload,sampleRate,channels,frames){
+  if(!audioContext||audioContext.state!=='running'||!frames)return;
+  const samples=new Int16Array(payload.buffer,payload.byteOffset,payload.byteLength>>1);
+  let pcm=new Float32Array(frames*2);
+  if(channels===2){
+    for(let i=0,j=0;i<samples.length;i+=2,j+=2){pcm[j]=samples[i]/32768;pcm[j+1]=samples[i+1]/32768}
+  }else{
+    for(let i=0,j=0;i<samples.length;i++,j+=2){const value=samples[i]/32768;pcm[j]=value;pcm[j+1]=value}
+  }
+  pcm=resampleStereo(pcm,sampleRate,audioContext.sampleRate);
+  const outputFrames=pcm.length>>1;
+  if(!outputFrames)return;
+  const buffer=audioContext.createBuffer(2,outputFrames,audioContext.sampleRate),left=buffer.getChannelData(0),right=buffer.getChannelData(1);
+  for(let i=0,j=0;i<outputFrames;i++,j+=2){left[i]=pcm[j];right[i]=pcm[j+1]}
+  const source=audioContext.createBufferSource();
+  source.buffer=buffer;
+  source.connect(audioContext.destination);
+  const now=audioContext.currentTime;
+  if(!audioNextTime||audioNextTime<now+0.015||audioNextTime>now+0.25)audioNextTime=now+0.055;
+  source.start(audioNextTime);
+  audioNextTime+=outputFrames/audioContext.sampleRate;
+  source.onended=()=>{try{source.disconnect()}catch(_){}};
+}
+
+document.addEventListener('pointerdown',()=>{void unlockAudio()},{capture:true,passive:true});
+document.addEventListener('keydown',()=>{void unlockAudio()},{capture:true});
+
+function sendTouch(phase,point,pointerId){if(!controlEnabled&&phase!=='cancel')return;const value=point||lastPoint;if(!value&&phase!=='cancel')return;sendControl({type:'touch',phase,pointerId:pointerId==null?(activePointer==null?0:activePointer):pointerId,x:value?value.x:0,y:value?value.y:0,cssX:value?value.cssX:0,cssY:value?value.cssY:0,seq:++touchSeq})}
+function flushMove(){moveRAF=0;if(!pendingMove)return;const point=pendingMove;pendingMove=null;lastPoint=point;sendTouch('move',point,point.pointerId)}
+video.addEventListener('pointerdown',event=>{if(!controlEnabled||(event.pointerType==='mouse'&&event.button!==0))return;const point=pointerPoint(event);if(!point)return;lastPoint=point;activePointer=event.pointerId;video.setPointerCapture(event.pointerId);sendTouch('down',point,event.pointerId);event.preventDefault()});
+video.addEventListener('pointermove',event=>{if(event.pointerId!==activePointer)return;const point=pointerPoint(event);if(!point)return;pendingMove=point;if(!moveRAF)moveRAF=requestAnimationFrame(flushMove);event.preventDefault()});
+function finishPointer(event,cancelled){if(event.pointerId!==activePointer)return;if(moveRAF){cancelAnimationFrame(moveRAF);moveRAF=0;flushMove()}const point=pointerPoint(event)||lastPoint;if(point)lastPoint=point;sendTouch(cancelled?'cancel':'up',point,event.pointerId);activePointer=null;pendingMove=null;event.preventDefault()}
+video.addEventListener('pointerup',event=>finishPointer(event,false));
+video.addEventListener('pointercancel',event=>finishPointer(event,true));
+video.addEventListener('lostpointercapture',event=>{if(event.pointerId===activePointer)finishPointer(event,true)});
+video.addEventListener('contextmenu',event=>{if(controlEnabled)event.preventDefault()});
+
+function scheduleReconnect(reason){
+  if(closing)return;
+  clearTimeout(reconnectTimer);
+  showError((reason||'连接已断开')+'，正在重新连接…');
+  reconnectTimer=setTimeout(()=>connectViewer(),800);
+}
+async function connectViewer(){
+  const generation=++connectGeneration;
+  clearTimeout(reconnectTimer);
+  message.style.display='none';
+  let localPC=null;
+  try{
+    const oldPC=pc;
+    if(oldPC){oldPC.onconnectionstatechange=null;oldPC.ontrack=null;oldPC.close()}
+    controlEnabled=false;
+    controlChannel=null;
+    localPC=new RTCPeerConnection({iceServers:[]});
+    pc=localPC;
+    controlChannel=localPC.createDataChannel('control',{ordered:true});
+    controlChannel.onopen=()=>{if(pc!==localPC)return;controlEnabled=true;sendControl({type:'control',enabled:true})};
+    controlChannel.onclose=()=>{if(pc!==localPC)return;controlEnabled=false;if(activePointer!==null){activePointer=null;pendingMove=null}};
+    localPC.ontrack=event=>{if(pc===localPC&&event.track.kind==='video'){video.srcObject=new MediaStream([event.track]);video.play().catch(error=>{if(error.name!=='NotAllowedError')showError('播放失败：'+error.message)})}};
+    localPC.onconnectionstatechange=()=>{
+      if(closing||pc!==localPC)return;
+      if(localPC.connectionState==='failed'||localPC.connectionState==='closed')scheduleReconnect('连接已断开');
+      else if(localPC.connectionState==='disconnected')setTimeout(()=>{if(!closing&&pc===localPC&&localPC.connectionState==='disconnected')scheduleReconnect('网络暂时中断')},1200);
+    };
+    localPC.addTransceiver('video',{direction:'recvonly'});
+    await localPC.setLocalDescription(await localPC.createOffer());
+    await waitIce(localPC);
+    if(closing||generation!==connectGeneration||pc!==localPC)return;
+
+    const controller=typeof AbortController==='function'?new AbortController():null;
+    const timeout=setTimeout(()=>{if(controller)controller.abort()},7000);
+    let response;
+    try{
+      response=await fetch('/webrtc/offer',{method:'POST',headers:{'Content-Type':'application/sdp'},body:localPC.localDescription.sdp,signal:controller?controller.signal:undefined});
+    }finally{clearTimeout(timeout)}
+    if(!response.ok)throw new Error(await response.text());
+    const answer=await response.text();
+    if(closing||generation!==connectGeneration||pc!==localPC)return;
+    await localPC.setRemoteDescription({type:'answer',sdp:answer});
+  }catch(error){
+    console.error(error);
+    if(!closing&&generation===connectGeneration)scheduleReconnect(error.name==='AbortError'?'协商超时':'连接失败：'+error.message);
+  }
+}
+window.addEventListener('beforeunload',()=>{closing=true;clearTimeout(reconnectTimer);clearTimeout(audioReconnectTimer);connectGeneration++;if(activePointer!==null)sendTouch('cancel',lastPoint,activePointer);sendControl({type:'control',enabled:false});if(audioAbortController)audioAbortController.abort();if(audioContext)audioContext.close().catch(()=>{});if(pc){pc.onconnectionstatechange=null;pc.close()}});
+connectViewer();
+</script>
+</body>
+</html>
